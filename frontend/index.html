@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Cloud Drive</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Smart Cloud Drive</h1>
+  </header>
+
+  <main>
+    <section id="upload-section">
+      <div id="drop-area">
+        <p>Drag & Drop your files here or</p>
+        <input type="file" id="fileElem" multiple />
+        <label for="fileElem" class="upload-btn">Browse Files</label>
+      </div>
+    </section>
+
+    <section id="tools">
+      <button id="back-btn" disabled>⬅ Back</button>
+      <span id="current-path">Home</span>
+      <input type="text" id="search" placeholder="Search by file name..." />
+      <select id="sort">
+        <option value="name">Sort by Name</option>
+        <option value="size">Sort by Size</option>
+        <option value="date">Sort by Upload Date</option>
+      </select>
+    </section>
+
+    <section id="file-list" class="grid-view"></section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

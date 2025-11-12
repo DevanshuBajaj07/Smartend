@@ -1,0 +1,82 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f6fa;
+  margin: 0;
+  padding: 0;
+  color: #333;
+}
+
+header {
+  background: #0066cc;
+  color: white;
+  padding: 1em;
+  text-align: center;
+}
+
+#drop-area {
+  border: 2px dashed #007bff;
+  border-radius: 10px;
+  padding: 40px;
+  text-align: center;
+  margin: 20px;
+  background: white;
+  transition: background 0.3s;
+}
+
+.upload-btn {
+  background: #007bff;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 20px;
+  flex-wrap: wrap;
+}
+
+#tools input,
+#tools select,
+#tools button {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+#file-list {
+  margin: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 15px;
+}
+
+.item {
+  background: white;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.item:hover {
+  transform: scale(1.03);
+  background: #eef5ff;
+}
+
+.item img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.item-name {
+  margin-top: 8px;
+  font-size: 14px;
+  word-break: break-all;
+}
