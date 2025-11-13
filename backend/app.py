@@ -1,129 +1,218 @@
 import os
+import json
 from pathlib import Path
 from datetime import datetime
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+
+BASE_DIR = Path(__file__).resolve().parent
+STORAGE_ROOT = BASE_DIR / "storage"
+RULES_FILE = BASE_DIR / "rules.json"
 
 app = Flask(__name__)
 CORS(app)
 
-# ====== CONFIG ======
-BASE_DIR = Path(__file__).resolve().parent
-STORAGE_ROOT = BASE_DIR / "storage"
+STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
-# Make sure storage folder exists
-STORAGE_ROOT.mkdir(exist_ok=True)
 
-# Map file extensions to folder names
-EXTENSION_MAP = {
-    ".doc": "word",
-    ".docx": "word",
-    ".pdf": "pdf",
-    ".xls": "excel",
-    ".xlsx": "excel",
-    ".ppt": "powerpoint",
-    ".pptx": "powerpoint",
-    ".mp3": "audio",
-    ".wav": "audio",
-    ".mp4": "video",
-    ".mov": "video",
-    ".avi": "video",
-    ".png": "images",
-    ".jpg": "images",
-    ".jpeg": "images",
-    ".txt": "text"
-}
+def load_custom_rules():
+    if RULES_FILE.is_file():
+        try:
+            return json.loads(RULES_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
 
-def get_category_for_extension(ext: str) -> str:
+
+def save_custom_rules(rules):
+    RULES_FILE.write_text(json.dumps(rules, indent=2))
+
+
+def categorize_file(filename: str, custom_rules: dict) -> str:
     """
-    Decide folder for a given file extension.
-    If unknown, create a folder with the extension name.
+    Decide which folder a file should go in based on extension.
+    Custom rules > built-in groups > 'EXT Files' > 'Other'
     """
-    ext = ext.lower()
-    if ext in EXTENSION_MAP:
-        return EXTENSION_MAP[ext]
-    return ext.lstrip(".") or "others"
+    ext = Path(filename).suffix.lower()
+
+    # 1. Custom rules
+    for folder, exts in custom_rules.items():
+        if ext in exts:
+            return folder
+
+    # 2. Built-in mapping
+    groups = {
+        "MS Word": [".doc", ".docx", ".rtf", ".odt"],
+        "MS Excel": [".xls", ".xlsx", ".csv"],
+        "PDF": [".pdf"],
+        "PowerPoint": [".ppt", ".pptx"],
+        "Images": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"],
+        "Audio": [".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a"],
+        "Video": [".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm"],
+        "Text": [".txt", ".md", ".log"],
+        "Archives": [".zip", ".rar", ".7z", ".tar", ".gz"],
+    }
+
+    for folder, exts in groups.items():
+        if ext in exts:
+            return folder
+
+    # 3. New extension → its own folder, e.g. "JSON Files"
+    if ext:
+        return ext.lstrip(".").upper() + " Files"
+
+    # 4. No extension
+    return "Other"
 
 
-@app.route("/health", methods=["GET"])
-def health_check():
+def build_file_info(path: Path) -> dict:
+    stat = path.stat()
+    rel_path = path.relative_to(STORAGE_ROOT)
+    parts = rel_path.parts
+    category = parts[0] if len(parts) > 1 else "Uncategorized"
+
+    return {
+        "name": path.name,
+        "relative_path": str(rel_path).replace("\\", "/"),
+        "category": category,
+        "size_bytes": stat.st_size,
+        "created_time": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+        "last_access_time": datetime.fromtimestamp(stat.st_atime).isoformat(),
+        "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+    }
+
+
+# ==========================
+# ROUTES
+# ==========================
+
+@app.route("/health")
+def health():
     return jsonify({"status": "ok", "message": "SmartDrive backend running!"})
 
 
 @app.route("/upload", methods=["POST"])
-def upload_file():
-    if "file" not in request.files:
-        return jsonify({"success": False, "message": "No file found"}), 400
+def upload():
+    custom_rules = load_custom_rules()
 
-    file = request.files["file"]
+    files = request.files.getlist("file")
+    if not files:
+        return jsonify({"success": False, "message": "No files uploaded."}), 400
 
-    if file.filename == "":
-        return jsonify({"success": False, "message": "Empty filename"}), 400
+    saved = []
 
-    filename = secure_filename(file.filename)
-    _, ext = os.path.splitext(filename)
+    for f in files:
+        if not f or f.filename == "":
+            continue
 
-    category = get_category_for_extension(ext)
+        filename = secure_filename(f.filename)
+        category = categorize_file(filename, custom_rules)
 
-    # Ensure category folder exists
-    category_path = STORAGE_ROOT / category
-    category_path.mkdir(exist_ok=True)
+        target_dir = STORAGE_ROOT / category
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-    save_path = category_path / filename
+        target_path = target_dir / filename
+        f.save(target_path)
 
-    try:
-        file.save(save_path)
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Error saving file: {e}"}), 500
+        saved.append(build_file_info(target_path))
 
-    stats = save_path.stat()
+    if not saved:
+        return jsonify({"success": False, "message": "No valid files uploaded."}), 400
 
     return jsonify({
         "success": True,
-        "message": "File uploaded successfully",
-        "file": {
-            "name": filename,
-            "category": category,
-            "size_bytes": stats.st_size,
-            "created_time": datetime.fromtimestamp(stats.st_ctime).isoformat(),
-            "last_access_time": datetime.fromtimestamp(stats.st_atime).isoformat(),
-            "relative_path": f"{category}/{filename}"
-        }
+        "message": f"Uploaded {len(saved)} file(s).",
+        "files": saved,
     })
 
 
 @app.route("/files", methods=["GET"])
 def list_files():
-    files = []
-
-    for cat_folder in STORAGE_ROOT.iterdir():
-        if cat_folder.is_dir():
-            for file_path in cat_folder.iterdir():
-                if file_path.is_file():
-                    stats = file_path.stat()
-                    files.append({
-                        "name": file_path.name,
-                        "category": cat_folder.name,
-                        "size_bytes": stats.st_size,
-                        "created_time": datetime.fromtimestamp(stats.st_ctime).isoformat(),
-                        "last_access_time": datetime.fromtimestamp(stats.st_atime).isoformat(),
-                        "relative_path": f"{cat_folder.name}/{file_path.name}"
-                    })
-
-    return jsonify({"files": files})
+    results = []
+    for root, _, files in os.walk(STORAGE_ROOT):
+        for name in files:
+            path = Path(root) / name
+            results.append(build_file_info(path))
+    return jsonify({"files": results})
 
 
-@app.route("/download/<path:relpath>", methods=["GET"])
-def download(relpath):
-    file_path = STORAGE_ROOT / relpath
+def safe_resolve_relpath(rel_path: str) -> Path:
+    """
+    Convert 'MS Word/report.docx' → absolute path, ensure it stays inside STORAGE_ROOT.
+    """
+    joined = STORAGE_ROOT / rel_path
+    resolved = joined.resolve()
 
-    if not file_path.exists():
-        return jsonify({"success": False, "message": "File not found"}), 404
+    try:
+        resolved.relative_to(STORAGE_ROOT)
+    except ValueError:
+        abort(400, description="Invalid path")
+
+    return resolved
+
+
+@app.route("/download", methods=["GET", "HEAD"])
+def download():
+    rel_path = request.args.get("path")
+    if not rel_path:
+        abort(400, description="Missing path parameter")
+
+    file_path = safe_resolve_relpath(rel_path)
+
+    if not file_path.is_file():
+        abort(404, description="File not found")
+
+    if request.method == "HEAD":
+        return ("", 200)
 
     return send_file(file_path, as_attachment=True)
 
 
+@app.route("/delete", methods=["DELETE"])
+def delete():
+    rel_path = request.args.get("path")
+    if not rel_path:
+        return jsonify({"success": False, "message": "Missing path parameter"}), 400
+
+    file_path = safe_resolve_relpath(rel_path)
+
+    if not file_path.is_file():
+        return jsonify({"success": False, "message": "File not found"}), 404
+
+    file_path.unlink()
+
+    return jsonify({"success": True, "message": "File deleted."})
+
+
+@app.route("/rules", methods=["GET", "POST"])
+def rules():
+    if request.method == "GET":
+        return jsonify({"custom_rules": load_custom_rules()})
+
+    data = request.get_json(silent=True) or {}
+    folder = data.get("folder", "").strip()
+    extensions = data.get("extensions", [])
+
+    if not folder or not isinstance(extensions, list):
+        return jsonify({"success": False, "message": "Invalid rule data."}), 400
+
+    norm_exts = []
+    for ext in extensions:
+        e = ext.strip().lower()
+        if not e:
+            continue
+        if not e.startswith("."):
+            e = "." + e
+        norm_exts.append(e)
+
+    rules = load_custom_rules()
+    rules[folder] = norm_exts
+    save_custom_rules(rules)
+
+    return jsonify({"success": True, "custom_rules": rules})
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
