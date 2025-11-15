@@ -1,5 +1,5 @@
 // Change BACKEND to your EC2 IP if needed:
-const BACKEND = "http://54.210.110.1:5000";
+const BACKEND = "http://127.0.0.1:5000";
 
 document.addEventListener("DOMContentLoaded", () => {
     const UI = {
