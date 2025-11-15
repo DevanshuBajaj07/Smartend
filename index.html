@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Smart Cloud Drive</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-title">
+            <h1>Smart Cloud Drive</h1>
+            <p>Organize, search, and download your files in one place.</p>
+        </div>
+        <div class="status-wrapper">
+            <span id="statusBadge" class="status-badge">Checking...</span>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <!-- Upload area -->
+        <section class="upload-section">
+            <div id="dropZone" class="drop-zone">
+                <div class="drop-zone-inner">
+                    <h2>Upload Files</h2>
+                    <p>Drag &amp; drop your files here, or</p>
+                    <button id="browseBtn" class="btn-primary">Browse Files</button>
+                    <input
+                        id="fileInput"
+                        type="file"
+                        multiple
+                        style="display: none"
+                    />
+                </div>
+            </div>
+        </section>
+
+        <!-- Controls + views -->
+        <section class="browser-section">
+            <div class="browser-controls">
+                <button
+                    id="backToFoldersBtn"
+                    class="btn-secondary"
+                    disabled
+                >
+                    ← Folders
+                </button>
+                <span id="currentFolderLabel" class="breadcrumb-label">
+                    Folders
+                </span>
+                <div class="flex-spacer"></div>
+                <input
+                    id="searchInput"
+                    type="text"
+                    placeholder="Search by file or folder name..."
+                    class="search-input"
+                />
+                <select id="sortSelect" class="sort-select">
+                    <option value="name-asc">Sort by Name (A → Z)</option>
+                    <option value="name-desc">Sort by Name (Z → A)</option>
+                    <option value="size-asc">Sort by Size (Small → Large)</option>
+                    <option value="size-desc">Sort by Size (Large → Small)</option>
+                    <option value="created-new">Sort by Created (New → Old)</option>
+                    <option value="created-old">Sort by Created (Old → New)</option>
+                    <option value="access-new">Sort by Last Access (New → Old)</option>
+                    <option value="access-old">Sort by Last Access (Old → New)</option>
+                </select>
+            </div>
+
+            <!-- Folder grid -->
+            <div id="folderView">
+                <div id="folderGrid" class="folder-grid">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+
+            <!-- File table -->
+            <div id="fileView" class="hidden">
+                <table id="fileTable" class="file-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Extension</th>
+                            <th>Size</th>
+                            <th>Created</th>
+                            <th>Last Access</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileTableBody">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Custom rules -->
+        <section class="rules-section">
+            <h2>Custom Folder Rules</h2>
+            <p>
+                Create your own folders for new file types. Example:
+                folder <code>CAD</code> with extensions
+                <code>dwg, dxf</code>.
+            </p>
+            <div class="rules-form">
+                <input
+                    id="ruleFolder"
+                    type="text"
+                    placeholder="Folder name (e.g. CAD)"
+                />
+                <input
+                    id="ruleExtensions"
+                    type="text"
+                    placeholder="Extensions (comma separated, e.g. dwg, dxf)"
+                />
+                <button id="saveRuleBtn" class="btn-primary">Save Rule</button>
+            </div>
+            <div id="rulesList" class="rules-list">
+                <!-- Filled by JS -->
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
