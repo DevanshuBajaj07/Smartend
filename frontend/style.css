@@ -1,3 +1,7 @@
+/* -----------------------------------------------
+   CSS DESIGN SYSTEM — GLOBAL VARIABLES
+   Used for consistent colors, shadows, radius, fonts
+-------------------------------------------------- */
 :root {
     --blue: #0b72e7;
     --blue-soft: #e5f1ff;
@@ -14,12 +18,14 @@
         sans-serif;
 }
 
+/* Reset box-sizing for more predictable layout */
 *,
 *::before,
 *::after {
     box-sizing: border-box;
 }
 
+/* Remove default browser spacing */
 html,
 body {
     margin: 0;
@@ -27,44 +33,47 @@ body {
     height: 100%;
 }
 
+/* Global page styling */
 body {
     font-family: var(--font-main);
     background: radial-gradient(circle at top left, #e0f2ff, #f9fafb);
     color: var(--text-main);
 }
 
-/* HEADER */
+/* ------------------------- HEADER ------------------------- */
 
 .app-header {
-    display: flex;
+    display: flex; /* Align title + status horizontally */
     justify-content: space-between;
     align-items: center;
     padding: 18px 32px;
     background: linear-gradient(90deg, #0b72e7, #2563eb);
     color: white;
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35);
-    position: sticky;
+    position: sticky; /* Keep header visible while scrolling */
     top: 0;
     z-index: 10;
 }
 
+/* Main title & subtitle */
 .app-title h1 {
     margin: 0;
     font-size: 24px;
     font-weight: 700;
 }
-
 .app-title p {
     margin: 4px 0 0;
     font-size: 13px;
     opacity: 0.9;
 }
 
+/* Online/offline badge wrapper */
 .status-wrapper {
     display: flex;
     align-items: center;
 }
 
+/* Badge default style */
 .status-badge {
     padding: 6px 12px;
     border-radius: 16px;
@@ -74,30 +83,31 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
+/* Green / Red variations */
 .status-online {
     background: rgba(34, 197, 94, 0.14);
     border-color: rgba(34, 197, 94, 0.55);
 }
-
 .status-offline {
     background: rgba(248, 113, 113, 0.14);
     border-color: rgba(248, 113, 113, 0.55);
 }
 
-/* MAIN LAYOUT */
+/* ------------------------- MAIN CONTENT AREA ------------------------- */
 
 .app-main {
-    max-width: 1200px;
+    max-width: 1200px; /* Responsive centered width */
     margin: 24px auto 48px;
     padding: 0 16px 24px;
 }
 
-/* UPLOAD SECTION */
+/* ------------------------- FILE UPLOAD SECTION ------------------------- */
 
 .upload-section {
     margin-bottom: 16px;
 }
 
+/* Drag & drop upload area */
 .drop-zone {
     border-radius: var(--radius-lg);
     padding: 32px;
@@ -110,12 +120,14 @@ body {
         transform 0.1s ease;
 }
 
+/* Hover effect highlight */
 .drop-zone:hover {
     border-color: var(--blue);
     box-shadow: 0 16px 40px rgba(37, 99, 235, 0.25);
     transform: translateY(-1px);
 }
 
+/* Active drop highlight (when dragging a file over) */
 .drop-zone-hover {
     border-color: #22c55e !important;
     box-shadow: 0 18px 40px rgba(34, 197, 94, 0.25);
@@ -125,14 +137,13 @@ body {
     margin: 0 0 4px;
     font-size: 20px;
 }
-
 .drop-zone-inner p {
     margin: 0 0 16px;
     color: var(--text-muted);
     font-size: 13px;
 }
 
-/* BUTTONS */
+/* ------------------------- BUTTON STYLES ------------------------- */
 
 .btn-primary,
 .btn-secondary,
@@ -148,29 +159,30 @@ body {
         transform 0.1s ease, color 0.15s ease;
 }
 
+/* Blue main button */
 .btn-primary {
     background: linear-gradient(90deg, #0ea5e9, #2563eb);
     color: white;
     box-shadow: 0 10px 18px rgba(37, 99, 235, 0.3);
 }
-
 .btn-primary:hover {
     box-shadow: 0 14px 26px rgba(37, 99, 235, 0.4);
     transform: translateY(-1px);
 }
 
+/* White secondary button */
 .btn-secondary {
     background: white;
     color: var(--text-main);
     border: 1px solid var(--border);
 }
-
 .btn-secondary:disabled {
     opacity: 0.5;
     cursor: default;
     box-shadow: none;
 }
 
+/* Small pill style button */
 .btn-small {
     background: #eff6ff;
     color: #1d4ed8;
@@ -179,11 +191,11 @@ body {
     font-size: 12px;
     border: 1px solid #bfdbfe;
 }
-
 .btn-small:hover {
     background: #dbeafe;
 }
 
+/* Red delete button */
 .btn-danger {
     background: #fee2e2;
     color: #b91c1c;
@@ -193,12 +205,11 @@ body {
     border: 1px solid #fecaca;
     margin-left: 6px;
 }
-
 .btn-danger:hover {
     background: #fecaca;
 }
 
-/* BROWSER CONTROLS */
+/* ------------------------- FILE BROWSER CONTROLS ------------------------- */
 
 .browser-section {
     margin-top: 18px;
@@ -222,9 +233,10 @@ body {
 }
 
 .flex-spacer {
-    flex: 1;
+    flex: 1; /* Push search input to right */
 }
 
+/* Search bar */
 .search-input {
     min-width: 220px;
     padding: 8px 10px;
@@ -233,6 +245,7 @@ body {
     font-size: 13px;
 }
 
+/* Sort dropdown */
 .sort-select {
     margin-left: 8px;
     padding: 7px 10px;
@@ -241,11 +254,11 @@ body {
     font-size: 13px;
 }
 
-/* FOLDER GRID */
+/* ------------------------- FOLDER GRID DISPLAY ------------------------- */
 
 .folder-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* Responsive grid */
     gap: 12px;
 }
 
@@ -260,8 +273,8 @@ body {
     cursor: pointer;
     text-align: left;
     width: 100%;
+    transition: 0.15s ease;
 }
-
 .folder-card:hover {
     box-shadow: 0 10px 22px rgba(37, 99, 235, 0.25);
     transform: translateY(-1px);
@@ -277,22 +290,21 @@ body {
     flex-direction: column;
 }
 
+/* Folder name + meta stats */
 .folder-name {
     font-weight: 600;
     margin-bottom: 4px;
 }
-
 .folder-meta {
     font-size: 11px;
     color: var(--text-muted);
 }
-
 .folder-meta span + span::before {
-    content: "•";
+    content: "•"; /* Bullet separator between size + file count */
     margin: 0 4px;
 }
 
-/* FILE TABLE */
+/* ------------------------- FILE TABLE ------------------------- */
 
 .file-table {
     width: 100%;
@@ -314,14 +326,17 @@ body {
     border-bottom: 1px solid #edf2f7;
 }
 
+/* Hover row highlight */
 .file-table tbody tr:hover {
     background: #f9fafb;
 }
 
+/* Bold filename */
 .file-table .col-name {
     font-weight: 500;
 }
 
+/* When no files exist */
 .empty-row td {
     text-align: center;
     color: var(--text-muted);
@@ -336,7 +351,7 @@ body {
     text-align: center;
 }
 
-/* RULES */
+/* ------------------------- RULES SECTION ------------------------- */
 
 .rules-section {
     margin-top: 24px;
@@ -356,6 +371,7 @@ body {
     color: var(--text-muted);
 }
 
+/* Add rule input + button layout */
 .rules-form {
     display: flex;
     flex-wrap: wrap;
@@ -371,20 +387,21 @@ body {
     font-size: 13px;
 }
 
+/* Rule list style spacing */
 .rules-list {
     font-size: 13px;
 }
-
 .rule-row + .rule-row {
     margin-top: 4px;
 }
 
-/* MISC */
+/* ------------------------- UTILITY CLASSES ------------------------- */
 
 .hidden {
     display: none;
 }
 
+/* Code text styling */
 code {
     font-family: "JetBrains Mono", Menlo, Consolas, monospace;
     background: #f3f4f6;

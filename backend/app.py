@@ -7,17 +7,27 @@ from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+# Define base directory and storage paths
 BASE_DIR = Path(__file__).resolve().parent
 STORAGE_ROOT = BASE_DIR / "storage"
 RULES_FILE = BASE_DIR / "rules.json"
 
+# Initialize Flask app and enable CORS
 app = Flask(__name__)
 CORS(app)
 
+# Ensure the storage directory exists
 STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
+# ==========================
+# HELPER FUNCTIONS
+# ==========================
 
 def load_custom_rules():
+    """
+    Load custom file categorization rules from the rules.json file.
+    Returns an empty dictionary if the file doesn't exist or fails to load.
+    """
     if RULES_FILE.is_file():
         try:
             return json.loads(RULES_FILE.read_text())
