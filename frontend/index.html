@@ -1,30 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Basic page setup and metadata -->
     <meta charset="UTF-8" />
     <title>Smart Cloud Drive</title>
+    <!-- Make layout responsive on mobile devices -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Main stylesheet for the app UI -->
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+    <!-- Top fixed header with app title and backend status -->
     <header class="app-header">
         <div class="app-title">
             <h1>Smart Cloud Drive</h1>
             <p>Organize, search, and download your files in one place.</p>
         </div>
+        <!-- Status badge is updated by JS (Online / Offline) -->
         <div class="status-wrapper">
             <span id="statusBadge" class="status-badge">Checking...</span>
         </div>
     </header>
 
+    <!-- Main application container -->
     <main class="app-main">
-        <!-- Upload area -->
+        <!-- =======================
+             FILE UPLOAD SECTION
+             Drag & drop + Browse
+        ======================== -->
         <section class="upload-section">
+            <!-- Drop zone used for drag-and-drop uploads -->
             <div id="dropZone" class="drop-zone">
                 <div class="drop-zone-inner">
                     <h2>Upload Files</h2>
                     <p>Drag &amp; drop your files here, or</p>
+
+                    <!-- Button triggers hidden file input via JS -->
                     <button id="browseBtn" class="btn-primary">Browse Files</button>
+
+                    <!-- Hidden file input (multiple files supported) -->
                     <input
                         id="fileInput"
                         type="file"
@@ -35,9 +49,14 @@
             </div>
         </section>
 
-        <!-- Controls + views -->
+        <!-- =======================
+             BROWSER SECTION
+             Folder view + File view
+        ======================== -->
         <section class="browser-section">
+            <!-- Top controls: back, breadcrumb, search, sort -->
             <div class="browser-controls">
+                <!-- Back button: enabled only when inside a folder -->
                 <button
                     id="backToFoldersBtn"
                     class="btn-secondary"
@@ -45,16 +64,24 @@
                 >
                     ← Folders
                 </button>
+
+                <!-- Breadcrumb label shows "Folders" or current folder name -->
                 <span id="currentFolderLabel" class="breadcrumb-label">
                     Folders
                 </span>
+
+                <!-- Spacer pushes search/sort to the right -->
                 <div class="flex-spacer"></div>
+
+                <!-- Search box filters folders or files depending on view -->
                 <input
                     id="searchInput"
                     type="text"
                     placeholder="Search by file or folder name..."
                     class="search-input"
                 />
+
+                <!-- Sort dropdown: options handled in JS (applySort) -->
                 <select id="sortSelect" class="sort-select">
                     <option value="name-asc">Sort by Name (A → Z)</option>
                     <option value="name-desc">Sort by Name (Z → A)</option>
@@ -67,14 +94,15 @@
                 </select>
             </div>
 
-            <!-- Folder grid -->
+            <!-- FOLDER GRID VIEW (default view) -->
             <div id="folderView">
+                <!-- JS dynamically inserts folder "cards" here -->
                 <div id="folderGrid" class="folder-grid">
                     <!-- Filled by JS -->
                 </div>
             </div>
 
-            <!-- File table -->
+            <!-- FILE TABLE VIEW (inside a specific folder) -->
             <div id="fileView" class="hidden">
                 <table id="fileTable" class="file-table">
                     <thead>
@@ -88,6 +116,7 @@
                             <th>Actions</th>
                         </tr>
                     </thead>
+                    <!-- JS fills this with <tr> rows for each file -->
                     <tbody id="fileTableBody">
                         <!-- Filled by JS -->
                     </tbody>
@@ -95,7 +124,10 @@
             </div>
         </section>
 
-        <!-- Custom rules -->
+        <!-- =======================
+             CUSTOM FOLDER RULES
+             (Auto-sorting logic)
+        ======================== -->
         <section class="rules-section">
             <h2>Custom Folder Rules</h2>
             <p>
@@ -103,25 +135,33 @@
                 folder <code>CAD</code> with extensions
                 <code>dwg, dxf</code>.
             </p>
+
+            <!-- Form for adding/updating rules in backend -->
             <div class="rules-form">
+                <!-- Target folder name -->
                 <input
                     id="ruleFolder"
                     type="text"
                     placeholder="Folder name (e.g. CAD)"
                 />
+                <!-- Comma-separated list of extensions -->
                 <input
                     id="ruleExtensions"
                     type="text"
                     placeholder="Extensions (comma separated, e.g. dwg, dxf)"
                 />
+                <!-- Button triggers POST /rules in script.js -->
                 <button id="saveRuleBtn" class="btn-primary">Save Rule</button>
             </div>
+
+            <!-- Display area for current rules (rendered via JS) -->
             <div id="rulesList" class="rules-list">
                 <!-- Filled by JS -->
             </div>
         </section>
     </main>
 
+    <!-- Main front-end logic: fetching files, rules, upload, download, etc. -->
     <script src="script.js"></script>
 </body>
 </html>
