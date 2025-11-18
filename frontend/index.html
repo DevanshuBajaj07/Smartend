@@ -124,6 +124,8 @@
 
                             <!-- File table view (inside a folder) -->
                             <div id="fileView" class="hidden">
+                                <!-- Matching folders for search results (appears above file table) -->
+                                <div id="searchFolderMatches" class="folder-grid search-folder-grid"></div>
                                 <div class="table-wrapper">
                                     <table id="fileTable" class="file-table">
                                         <thead>
@@ -195,6 +197,19 @@
             </div>
         </main>
     </div>
+
+    <!-- Preview modal -->
+    <div id="previewModal" class="modal hidden">
+        <div class="modal-backdrop" id="previewBackdrop"></div>
+        <div class="modal-content" role="dialog" aria-modal="true">
+            <button id="previewCloseBtn" class="modal-close" aria-label="Close preview">×</button>
+            <div id="previewBody" class="preview-body"></div>
+        </div>
+    </div>
+
+    <!-- Markdown renderer + sanitizer (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
 
     <!-- Main app logic (unchanged) -->
     <script src="script.js"></script>

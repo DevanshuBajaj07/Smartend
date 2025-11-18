@@ -3,9 +3,18 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+import mimetypes
 from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except Exception:
+    Image = None
+    PIL_AVAILABLE = False
+import subprocess
+import shutil
 
 # Define base directory and storage paths
 BASE_DIR = Path(__file__).resolve().parent
@@ -18,6 +27,10 @@ CORS(app)
 
 # Ensure the storage directory exists
 STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Thumbnail storage (inside STORAGE_ROOT so it is accessible via existing view/download)
+THUMB_ROOT = STORAGE_ROOT / ".thumbnails"
+THUMB_ROOT.mkdir(parents=True, exist_ok=True)
 
 # ==========================
 # HELPER FUNCTIONS
@@ -34,6 +47,71 @@ def load_custom_rules():
         except Exception:
             return {}
     return {}
+
+
+def generate_image_thumbnail(src_path: Path, dst_path: Path, size=(320, 240)) -> bool:
+    try:
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        with Image.open(src_path) as im:
+            # convert to RGB for consistent JPEG output
+            if im.mode != "RGB":
+                im = im.convert("RGB")
+            im.thumbnail(size)
+            im.save(dst_path, format="JPEG", quality=85)
+        return True
+    except Exception:
+        return False
+
+
+def generate_video_thumbnail(src_path: Path, dst_path: Path, time_offset="00:00:01", size=(320, -2)) -> bool:
+    """Try to extract a single frame from video using ffmpeg (if available).
+
+    `size` should be (width, height) where -2 keeps aspect ratio. The dst will be a JPG.
+    Returns True if thumbnail created.
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False
+
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    # build scale filter
+    width = size[0]
+    scale = f"scale={width}:-2" if width and width > 0 else "scale=320:-2"
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-ss",
+        time_offset,
+        "-i",
+        str(src_path),
+        "-frames:v",
+        "1",
+        "-vf",
+        scale,
+        str(dst_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return dst_path.is_file()
+    except Exception:
+        return False
+
+
+def generate_thumbnail(file_path: Path):
+    """Create a JPEG thumbnail for images and videos under THUMB_ROOT mirroring folder structure."""
+    rel = file_path.relative_to(STORAGE_ROOT)
+    thumb_path = THUMB_ROOT / rel
+    thumb_path = thumb_path.with_suffix('.jpg')
+
+    ext = file_path.suffix.lower()
+    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'}
+    video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm'}
+
+    if ext in image_exts:
+        return generate_image_thumbnail(file_path, thumb_path)
+    if ext in video_exts:
+        return generate_video_thumbnail(file_path, thumb_path)
+    return False
 
 
 def save_custom_rules(rules):
@@ -83,10 +161,22 @@ def build_file_info(path: Path) -> dict:
     parts = rel_path.parts
     category = parts[0] if len(parts) > 1 else "Uncategorized"
 
+    # check for thumbnail in the thumbnails tree
+    thumb_rel = None
+    try:
+        thumb_candidate = THUMB_ROOT / rel_path
+        # thumbnails are saved as JPG
+        thumb_candidate = thumb_candidate.with_suffix('.jpg')
+        if thumb_candidate.is_file():
+            thumb_rel = thumb_candidate.relative_to(STORAGE_ROOT).as_posix()
+    except Exception:
+        thumb_rel = None
+
     return {
         "name": path.name,
         "relative_path": str(rel_path).replace("\\", "/"),
         "category": category,
+        "thumbnail": thumb_rel,
         "size_bytes": stat.st_size,
         "created_time": datetime.fromtimestamp(stat.st_ctime).isoformat(),
         "last_access_time": datetime.fromtimestamp(stat.st_atime).isoformat(),
@@ -126,6 +216,13 @@ def upload():
         target_path = target_dir / filename
         f.save(target_path)
 
+        # try to generate a thumbnail (images, videos)
+        try:
+            generate_thumbnail(target_path)
+        except Exception:
+            # thumbnail failures should not block upload
+            pass
+
         saved.append(build_file_info(target_path))
 
     if not saved:
@@ -142,6 +239,14 @@ def upload():
 def list_files():
     results = []
     for root, _, files in os.walk(STORAGE_ROOT):
+        root_path = Path(root).resolve()
+        # skip thumbnails directory
+        try:
+            if THUMB_ROOT.resolve() == root_path or THUMB_ROOT.resolve() in root_path.parents:
+                continue
+        except Exception:
+            pass
+
         for name in files:
             path = Path(root) / name
             results.append(build_file_info(path))
@@ -180,6 +285,29 @@ def download():
     return send_file(file_path, as_attachment=True)
 
 
+@app.route("/view", methods=["GET", "HEAD"])
+def view_file():
+    """Serve a file for inline viewing (no attachment). Uses correct Content-Type.
+
+    Note: this differs from `/download` which forces an attachment.
+    """
+    rel_path = request.args.get("path")
+    if not rel_path:
+        abort(400, description="Missing path parameter")
+
+    file_path = safe_resolve_relpath(rel_path)
+
+    if not file_path.is_file():
+        abort(404, description="File not found")
+
+    if request.method == "HEAD":
+        return ("", 200)
+
+    # Try to guess mimetype; fall back to octet-stream
+    mimetype, _ = mimetypes.guess_type(str(file_path))
+    return send_file(file_path, mimetype=(mimetype or "application/octet-stream"), as_attachment=False)
+
+
 @app.route("/delete", methods=["DELETE"])
 def delete():
     rel_path = request.args.get("path")
@@ -191,7 +319,18 @@ def delete():
     if not file_path.is_file():
         return jsonify({"success": False, "message": "File not found"}), 404
 
+    # remove the file
     file_path.unlink()
+
+    # also remove any generated thumbnail
+    try:
+        rel = file_path.relative_to(STORAGE_ROOT)
+        thumb = THUMB_ROOT / rel
+        thumb = thumb.with_suffix('.jpg')
+        if thumb.is_file():
+            thumb.unlink()
+    except Exception:
+        pass
 
     return jsonify({"success": True, "message": "File deleted."})
 

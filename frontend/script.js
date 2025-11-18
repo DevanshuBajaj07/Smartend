@@ -24,6 +24,11 @@ document.addEventListener("DOMContentLoaded", () => {
         ruleExtensions: document.getElementById("ruleExtensions"),
         saveRuleBtn: document.getElementById("saveRuleBtn"),
         rulesList: document.getElementById("rulesList"),
+        searchFolderMatches: document.getElementById("searchFolderMatches"),
+        previewModal: document.getElementById("previewModal"),
+        previewBody: document.getElementById("previewBody"),
+        previewCloseBtn: document.getElementById("previewCloseBtn"),
+        previewBackdrop: document.getElementById("previewBackdrop"),
     };
 
     // ===========
@@ -202,6 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     count: 0,
                     totalSize: 0,
                     lastActivity: null,
+                    thumbnail: null,
                 });
             }
             const entry = folderMap.get(folder);
@@ -212,6 +218,10 @@ document.addEventListener("DOMContentLoaded", () => {
             // Keep the most recent activity time
             if (!entry.lastActivity || (la && la > entry.lastActivity)) {
                 entry.lastActivity = la;
+            }
+            // pick a representative thumbnail for the folder (first available)
+            if (!entry.thumbnail && f.thumbnail) {
+                entry.thumbnail = f.thumbnail;
             }
         }
 
@@ -247,8 +257,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? folder.lastActivity.toLocaleString()
                 : "—";
 
+            const thumbHtml = folder.thumbnail
+                ? `<img src="${BACKEND}/view?path=${encodeURIComponent(folder.thumbnail)}" class="folder-thumb" alt="${folder.name} thumbnail"/>`
+                : `<div class="folder-icon">📁</div>`;
+
             card.innerHTML = `
-                <div class="folder-icon">📁</div>
+                ${thumbHtml}
                 <div class="folder-info">
                     <div class="folder-name">${folder.name}</div>
                     <div class="folder-meta">
@@ -315,14 +329,17 @@ document.addEventListener("DOMContentLoaded", () => {
             // Store backend path in data attribute for download/delete
             tr.dataset.relpath = file.relative_path;
 
+            const fileThumb = file.thumbnail ? `<img src="${BACKEND}/view?path=${encodeURIComponent(file.thumbnail)}" class="file-thumb" alt="thumb"/>` : '<div class="file-icon">📄</div>';
+
             tr.innerHTML = `
-                <td class="col-name">${file.name}</td>
+                <td class="col-name"><div class="file-cell">${fileThumb}<span class="file-name">${file.name}</span></div></td>
                 <td>${file.category}</td>
                 <td>${getExtension(file.name)}</td>
                 <td>${formatSize(file.size_bytes)}</td>
                 <td>${formatDate(file.created_time)}</td>
                 <td>${formatDate(file.last_access_time)}</td>
                 <td>
+                    <button class="btn-small btn-preview">Preview</button>
                     <button class="btn-small btn-download">Download</button>
                     <button class="btn-small btn-danger">Delete</button>
                 </td>
@@ -333,28 +350,195 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================
+    // SEARCH RESULTS (ACROSS ALL FOLDERS)
+    // ==========================
+
+    function renderSearchResults(search, prefilteredList) {
+        if (!UI.fileTableBody) return;
+        UI.fileTableBody.innerHTML = "";
+
+        const term = (search || "").trim().toLowerCase();
+        if (!term && !Array.isArray(prefilteredList)) {
+            const tr = document.createElement("tr");
+            tr.className = "empty-row";
+            tr.innerHTML = '<td colspan="7">No search term provided.</td>';
+            UI.fileTableBody.appendChild(tr);
+            return;
+        }
+
+        let list = [];
+
+        if (Array.isArray(prefilteredList)) {
+            list = prefilteredList.slice();
+        } else {
+            const termNoDot = term.replace(/^\./, "");
+
+            // Filter across allFiles by filename, relative path, or exact extension match
+            list = allFiles.filter((f) => {
+                const name = (f.name || "").toLowerCase();
+                const rel = (f.relative_path || "").toLowerCase();
+                const ext = getExtension(f.name).toLowerCase();
+
+                return (
+                    name.includes(term) ||
+                    rel.includes(term) ||
+                    // match extension exactly when user types 'pdf' or '.pdf'
+                    (ext && ext === termNoDot)
+                );
+            });
+        }
+
+        // Apply sort mode
+        const sort = UI.sortSelect ? UI.sortSelect.value : "name-asc";
+        applySort(sort, list, false);
+
+        if (!list.length) {
+            const tr = document.createElement("tr");
+            tr.className = "empty-row";
+            tr.innerHTML = '<td colspan="7">No files match your search.</td>';
+            UI.fileTableBody.appendChild(tr);
+            return;
+        }
+
+        list.forEach((file) => {
+            const tr = document.createElement("tr");
+            tr.dataset.relpath = file.relative_path;
+
+            const fileThumb2 = file.thumbnail ? `<img src="${BACKEND}/view?path=${encodeURIComponent(file.thumbnail)}" class="file-thumb" alt="thumb"/>` : '<div class="file-icon">📄</div>';
+
+            tr.innerHTML = `
+                <td class="col-name"><div class="file-cell">${fileThumb2}<span class="file-name">${file.name}</span></div></td>
+                <td>${file.category}</td>
+                <td>${getExtension(file.name)}</td>
+                <td>${formatSize(file.size_bytes)}</td>
+                <td>${formatDate(file.created_time)}</td>
+                <td>${formatDate(file.last_access_time)}</td>
+                <td>
+                    <button class="btn-small btn-preview">Preview</button>
+                    <button class="btn-small btn-download">Download</button>
+                    <button class="btn-small btn-danger">Delete</button>
+                </td>
+            `;
+
+            UI.fileTableBody.appendChild(tr);
+        });
+    }
+
+    // Render a small set of matching folders above the file table when searching
+    function renderMatchingFolders(folderNames, search) {
+        if (!UI.searchFolderMatches) return;
+        UI.searchFolderMatches.innerHTML = "";
+
+        if (!Array.isArray(folderNames) || !folderNames.length) {
+            UI.searchFolderMatches.classList.add("hidden");
+            return;
+        }
+
+        UI.searchFolderMatches.classList.remove("hidden");
+
+        // For each folder name produce a card similar to renderFolders
+        folderNames.forEach((folderName) => {
+            // compute some quick stats for display
+            const filesInFolder = allFiles.filter((f) => (f.category || "") === folderName);
+            const count = filesInFolder.length;
+            const totalSize = filesInFolder.reduce((s, f) => s + (f.size_bytes || 0), 0);
+            let lastActivity = null;
+            filesInFolder.forEach((f) => {
+                const la = latestActivity(f);
+                if (!lastActivity || (la && la > lastActivity)) lastActivity = la;
+            });
+
+            const card = document.createElement("button");
+            card.className = "folder-card";
+            card.dataset.folderName = folderName;
+
+            const last = lastActivity ? lastActivity.toLocaleString() : "—";
+
+            // try to find a thumbnail among files in the folder
+            const rep = filesInFolder.find((f) => f.thumbnail) || filesInFolder[0];
+            const thumbHtml = rep && rep.thumbnail
+                ? `<img src="${BACKEND}/view?path=${encodeURIComponent(rep.thumbnail)}" class="folder-thumb" alt="${folderName} thumbnail"/>`
+                : `<div class="folder-icon">📁</div>`;
+
+            card.innerHTML = `
+                ${thumbHtml}
+                <div class="folder-info">
+                    <div class="folder-name">${folderName}</div>
+                    <div class="folder-meta">
+                        <span>${count} file(s)</span>
+                        <span>· ${formatSize(totalSize)}</span>
+                        <span>· Last activity: ${last}</span>
+                    </div>
+                </div>
+            `;
+
+            card.addEventListener("click", () => {
+                currentFolder = folderName;
+                // clear the search input when the user navigates into a folder
+                if (UI.searchInput) UI.searchInput.value = "";
+                renderView();
+            });
+
+            UI.searchFolderMatches.appendChild(card);
+        });
+    }
+
+    // ==========================
     // VIEW TOGGLING (FOLDERS <-> FILES)
     // ==========================
 
     // Decide which view to show based on currentFolder value
     function renderView() {
-        const inFolder = !!currentFolder; // true when user is inside a folder
+        const search = UI.searchInput ? UI.searchInput.value.trim() : "";
+        const isSearching = !!search;
+        const inFolder = !!currentFolder && !isSearching; // true when user is inside a folder (not searching)
 
         // Update breadcrumb / label
         if (UI.currentFolderLabel) {
-            UI.currentFolderLabel.textContent = inFolder
+            UI.currentFolderLabel.textContent = isSearching
+                ? `Search: "${search}"`
+                : inFolder
                 ? currentFolder
                 : "Folders";
         }
 
-        // Back button only enabled when inside a folder
+        // Back button enabled when inside a folder or when viewing search results
         if (UI.backToFoldersBtn) {
-            UI.backToFoldersBtn.disabled = !inFolder;
+            UI.backToFoldersBtn.disabled = !(inFolder || isSearching);
         }
 
         // Toggle the DOM views and render appropriate data
         if (UI.folderView && UI.fileView) {
-            if (inFolder) {
+            if (isSearching) {
+                UI.folderView.classList.add("hidden");
+                UI.fileView.classList.remove("hidden");
+                // Prefer showing file matches if any exist; otherwise fall back to filtered folders
+                const termNoDot = search.replace(/^\./, "").toLowerCase();
+                const fileMatches = allFiles.filter((f) => {
+                    const name = (f.name || "").toLowerCase();
+                    const rel = (f.relative_path || "").toLowerCase();
+                    const ext = getExtension(f.name).toLowerCase();
+                    return (
+                        name.includes(search.toLowerCase()) ||
+                        rel.includes(search.toLowerCase()) ||
+                        (ext && ext === termNoDot)
+                    );
+                });
+
+                // Always show file view for search results
+                renderSearchResults(search, fileMatches);
+
+                // Also compute matching folders (by folder name contains search)
+                const folderMap = new Map();
+                for (const f of allFiles) {
+                    const folder = f.category || "Uncategorized";
+                    if (!folderMap.has(folder)) folderMap.set(folder, true);
+                }
+
+                const searchLower = search.toLowerCase();
+                const matchingFolders = Array.from(folderMap.keys()).filter((fn) => fn.toLowerCase().includes(searchLower));
+                renderMatchingFolders(matchingFolders, search);
+            } else if (inFolder) {
                 UI.folderView.classList.add("hidden");
                 UI.fileView.classList.remove("hidden");
                 renderFilesInFolder();
@@ -479,7 +663,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Delegate click events inside the file table (Download / Delete buttons)
+    // Delegate click events inside the file table (Preview / Download / Delete)
     if (UI.fileTableBody) {
         UI.fileTableBody.addEventListener("click", (e) => {
             const tr = e.target.closest("tr");
@@ -490,8 +674,162 @@ document.addEventListener("DOMContentLoaded", () => {
                 handleDownload(relpath);
             } else if (e.target.classList.contains("btn-danger")) {
                 handleDelete(relpath);
+            } else if (e.target.classList.contains("btn-preview")) {
+                const file = allFiles.find((f) => f.relative_path === relpath);
+                if (file) openPreview(file);
             }
         });
+    }
+
+    // ==========================
+    // PREVIEW HANDLING
+    // ==========================
+
+    function showModal() {
+        if (!UI.previewModal) return;
+        UI.previewModal.classList.remove("hidden");
+    }
+
+    function hideModal() {
+        if (!UI.previewModal) return;
+        UI.previewModal.classList.add("hidden");
+        if (UI.previewBody) UI.previewBody.innerHTML = "";
+    }
+
+    function closePreview() {
+        hideModal();
+    }
+
+    if (UI.previewCloseBtn) {
+        UI.previewCloseBtn.addEventListener("click", closePreview);
+    }
+
+    if (UI.previewBackdrop) {
+        UI.previewBackdrop.addEventListener("click", closePreview);
+    }
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closePreview();
+    });
+
+    async function openPreview(file) {
+        if (!file || !UI.previewBody) return;
+        UI.previewBody.innerHTML = "";
+
+        const rel = encodeURIComponent(file.relative_path);
+        const url = `${BACKEND}/view?path=${rel}`;
+        const ext = getExtension(file.name).toLowerCase();
+
+        // Helper to create a container and show it
+        function attach(node) {
+            UI.previewBody.appendChild(node);
+            showModal();
+        }
+
+        // Images
+        const imageExts = ["jpg","jpeg","png","gif","webp","bmp","tiff"];
+        if (imageExts.includes(ext)) {
+            const img = document.createElement("img");
+            img.src = url;
+            img.style.maxWidth = "100%";
+            img.style.maxHeight = "80vh";
+            img.alt = file.name;
+            attach(img);
+            return;
+        }
+
+        // PDF
+        if (ext === "pdf") {
+            const iframe = document.createElement("iframe");
+            iframe.src = url;
+            iframe.style.width = "100%";
+            iframe.style.height = "80vh";
+            iframe.style.border = "none";
+            attach(iframe);
+            return;
+        }
+
+        // Audio
+        const audioExts = ["mp3","wav","ogg","m4a","flac"];
+        if (audioExts.includes(ext)) {
+            const audio = document.createElement("audio");
+            audio.controls = true;
+            const src = document.createElement("source");
+            src.src = url;
+            audio.appendChild(src);
+            attach(audio);
+            return;
+        }
+
+        // Video
+        const videoExts = ["mp4","webm","mov","mkv","avi"];
+        if (videoExts.includes(ext)) {
+            const video = document.createElement("video");
+            video.controls = true;
+            video.style.maxWidth = "100%";
+            video.style.maxHeight = "80vh";
+            const src = document.createElement("source");
+            src.src = url;
+            video.appendChild(src);
+            attach(video);
+            return;
+        }
+
+        // Text-like previews: md, txt, csv, log, json
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                const err = document.createElement("div");
+                err.textContent = `Failed to load preview: ${res.status}`;
+                attach(err);
+                return;
+            }
+
+            const text = await res.text();
+
+            if (ext === "md") {
+                // render markdown using marked + sanitize with DOMPurify
+                const html = (window.marked ? window.marked.parse(text) : '<pre>' + escapeHtml(text) + '</pre>');
+                const safe = (window.DOMPurify ? DOMPurify.sanitize(html) : html);
+                const container = document.createElement("div");
+                container.className = "markdown-preview";
+                container.innerHTML = safe;
+                attach(container);
+                return;
+            }
+
+            if (ext === "json") {
+                try {
+                    const obj = JSON.parse(text);
+                    const pre = document.createElement("pre");
+                    pre.textContent = JSON.stringify(obj, null, 2);
+                    attach(pre);
+                    return;
+                } catch (e) {
+                    // fallback to raw text
+                }
+            }
+
+            // fallback: render as preformatted text
+            const pre = document.createElement("pre");
+            pre.textContent = text;
+            pre.style.maxHeight = "70vh";
+            pre.style.overflow = "auto";
+            attach(pre);
+        } catch (e) {
+            const err = document.createElement("div");
+            err.textContent = `Preview error: ${e.message}`;
+            attach(err);
+        }
+    }
+
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
     // ==========================
@@ -500,11 +838,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Re-render current view (folder grid or file table) when filters change
     function refreshFromControls() {
-        if (currentFolder) {
-            renderFilesInFolder();
-        } else {
-            renderFolders();
-        }
+        // Recompute view using the same logic as initial render (handles searching)
+        renderView();
     }
 
     // Live search (filters folders or files depending on view)
