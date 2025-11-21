@@ -96,6 +96,18 @@ def generate_video_thumbnail(src_path: Path, dst_path: Path, time_offset="00:00:
     except Exception:
         return False
 
+def make_unique_filename(directory: Path, filename: str) -> Path:
+    base = Path(filename).stem
+    ext = Path(filename).suffix
+    counter = 1
+    new_name = filename
+
+    while (directory / new_name).exists():
+        new_name = f"{base} ({counter}){ext}"
+        counter += 1
+
+    return directory / new_name
+
 
 def generate_thumbnail(file_path: Path):
     """Create a JPEG thumbnail for images and videos under THUMB_ROOT mirroring folder structure."""
@@ -213,27 +225,23 @@ def upload():
         target_dir = STORAGE_ROOT / category
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        target_path = target_dir / filename
+        # SAFE FILENAME
+        target_path = make_unique_filename(target_dir, filename)
+
         f.save(target_path)
 
-        # try to generate a thumbnail (images, videos)
         try:
             generate_thumbnail(target_path)
         except Exception:
-            # thumbnail failures should not block upload
             pass
 
         saved.append(build_file_info(target_path))
-
-    if not saved:
-        return jsonify({"success": False, "message": "No valid files uploaded."}), 400
 
     return jsonify({
         "success": True,
         "message": f"Uploaded {len(saved)} file(s).",
         "files": saved,
     })
-
 
 @app.route("/files", methods=["GET"])
 def list_files():
