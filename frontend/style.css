@@ -1,7 +1,5 @@
 /* =========================================
    DESIGN TOKENS & THEME VARIABLES
-   Default: LIGHT (Cloudy gradient)
-   Dark overrides in body.theme-dark
 ========================================= */
 
 :root {
@@ -102,7 +100,7 @@ body {
   z-index: 0;
 }
 
-/* Light "cloudy" gradient */
+/* Light gradient */
 body.theme-light .app-background {
   background: radial-gradient(
       circle at top left,
@@ -143,7 +141,7 @@ body.theme-dark .app-background {
   padding: 12px 16px 32px;
 }
 
-/* Top header / nav */
+/* Top header */
 .app-header {
   display: flex;
   align-items: center;
@@ -207,7 +205,7 @@ body.theme-dark .app-header {
   gap: 10px;
 }
 
-/* Status badge (JS toggles status-online/offline) */
+/* Status badge */
 .status-wrapper {
   display: flex;
   align-items: center;
@@ -273,7 +271,6 @@ body.theme-dark .theme-toggle-btn {
   border-color: var(--accent);
 }
 
-/* Icon visibility based on data-theme */
 .theme-toggle-btn .icon-sun,
 .theme-toggle-btn .icon-moon {
   transition: opacity 0.15s ease, transform 0.15s ease;
@@ -351,7 +348,6 @@ body.theme-dark .card::before {
     radial-gradient(circle at bottom, rgba(56, 189, 248, 0.12), transparent 55%);
 }
 
-/* Card header text */
 .card-header {
   display: flex;
   align-items: flex-start;
@@ -377,7 +373,7 @@ body.theme-dark .card::before {
 ========================================= */
 
 .upload-section {
-  /* uses .card */
+  position: relative;
 }
 
 /* Drag & drop area */
@@ -434,10 +430,16 @@ body.theme-dark .drop-zone {
   transform: translateY(-1px);
 }
 
-/* JS adds this while dragging files over */
+/* Drag hover */
 .drop-zone-hover {
   border-color: var(--accent-alt) !important;
   box-shadow: 0 18px 45px rgba(34, 197, 94, 0.4);
+}
+
+/* Busy state during upload */
+.drop-zone-busy {
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 /* =========================================
@@ -459,7 +461,6 @@ body.theme-dark .drop-zone {
     color 0.15s ease, border-color 0.15s ease;
 }
 
-/* Main call-to-action */
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #f9fafb;
@@ -472,7 +473,6 @@ body.theme-dark .drop-zone {
   box-shadow: 0 16px 32px rgba(37, 99, 235, 0.45);
 }
 
-/* Ghost / secondary button */
 .btn-ghost {
   background: transparent;
   color: var(--text-muted);
@@ -484,7 +484,6 @@ body.theme-dark .drop-zone {
   cursor: default;
 }
 
-/* Small buttons used in table (Download/Delete) */
 .btn-small {
   background: rgba(255, 255, 255, 0.9);
   color: var(--accent-strong);
@@ -492,6 +491,13 @@ body.theme-dark .drop-zone {
   padding: 5px 12px;
   font-size: 11px;
   border: 1px solid rgba(191, 219, 254, 0.8);
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+}
+
+.btn-small:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 body.theme-dark .btn-small {
@@ -500,11 +506,10 @@ body.theme-dark .btn-small {
   border-color: rgba(129, 140, 248, 0.6);
 }
 
-.btn-small:hover {
+.btn-small:hover:not(:disabled) {
   background: var(--accent-soft);
 }
 
-/* Red "danger" button (JS uses class btn-danger) */
 .btn-danger {
   background: rgba(248, 113, 113, 0.08);
   color: #b91c1c;
@@ -523,7 +528,6 @@ body.theme-dark .btn-danger {
   background: rgba(248, 113, 113, 0.18);
 }
 
-/* Full-width button */
 .btn-full {
   width: 100%;
 }
@@ -531,10 +535,6 @@ body.theme-dark .btn-danger {
 /* =========================================
    BROWSER CONTROLS
 ========================================= */
-
-.browser-section {
-  /* styled as .card */
-}
 
 .breadcrumb-block {
   display: flex;
@@ -548,7 +548,6 @@ body.theme-dark .btn-danger {
   color: var(--text-muted);
 }
 
-/* Search + sort */
 .search-sort-block {
   display: flex;
   align-items: center;
@@ -583,7 +582,6 @@ body.theme-dark .btn-danger {
   color: var(--text-soft);
 }
 
-/* Sort dropdown */
 .sort-select {
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-subtle);
@@ -607,7 +605,6 @@ body.theme-dark .btn-danger {
   gap: 10px;
 }
 
-/* Folder cards created by JS */
 .folder-card {
   display: flex;
   align-items: center;
@@ -670,6 +667,15 @@ body.theme-dark .folder-card {
   margin: 0 4px;
 }
 
+/* Thumbnails */
+.folder-thumb {
+  width: 84px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+
 /* =========================================
    FILE TABLE
 ========================================= */
@@ -722,7 +728,6 @@ body.theme-dark .file-table td {
   color: var(--text-main);
 }
 
-/* Row hover */
 .file-table tbody tr:hover {
   background: rgba(219, 234, 254, 0.8);
 }
@@ -735,13 +740,11 @@ body.theme-dark .file-table tbody tr:hover {
   font-weight: 500;
 }
 
-/* Empty rows for JS */
 .empty-row td {
   text-align: center;
   color: var(--text-muted);
 }
 
-/* General empty-state box (used for no folders) */
 .empty-state {
   padding: 20px 14px;
   border-radius: 14px;
@@ -752,23 +755,52 @@ body.theme-dark .file-table tbody tr:hover {
   text-align: center;
 }
 
+/* File cell with thumbnail */
+.file-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-thumb {
+  width: 48px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.file-icon {
+  width: 48px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card-soft);
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.file-name {
+  display: inline-block;
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* =========================================
    RULES SIDEBAR
 ========================================= */
-
-.rules-section {
-  /* uses .card */
-}
 
 .rules-form {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 10px;
   margin-bottom: 12px;
 }
 
-/* Input + label */
 .field-group {
   display: flex;
   flex-direction: column;
@@ -804,7 +836,6 @@ body.theme-dark .file-table tbody tr:hover {
   padding-right: 4px;
 }
 
-/* Each rule row (added by JS as .rule-row) */
 .rule-row + .rule-row {
   margin-top: 3px;
 }
@@ -815,7 +846,6 @@ body.theme-dark .file-table tbody tr:hover {
   color: var(--text-soft);
 }
 
-/* Code snippet style */
 code {
   font-family: "JetBrains Mono", Menlo, Consolas, monospace;
   background: var(--bg-card-soft);
@@ -825,52 +855,152 @@ code {
 }
 
 /* =========================================
-   UTILITIES & RESPONSIVE
+   STORAGE USAGE BAR
 ========================================= */
 
-.hidden {
-  display: none;
+.storage-section {
+  margin-top: 4px;
+  padding: 10px 10px 8px;
+  border-radius: 12px;
+  background: var(--bg-card-soft);
+  border: 1px dashed var(--border-subtle);
 }
 
-@media (max-width: 900px) {
-  .layout-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .search-sort-block {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
+.storage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
 }
 
-@media (max-width: 640px) {
-  .app-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .card {
-    padding: 14px 12px 16px;
-  }
+.storage-usage-label {
+  font-weight: 600;
+  color: var(--text-strong);
 }
 
-/* Preview modal styles */
+.storage-bar-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  overflow: hidden;
+}
+
+body.theme-dark .storage-bar-track {
+  background: rgba(55, 65, 81, 0.9);
+}
+
+.storage-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-alt));
+  transition: width 0.2s ease;
+}
+
+.storage-footer {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-soft);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* =========================================
+   RECENT ACTIVITY
+========================================= */
+
+.recent-files-list {
+  list-style: none;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.recent-file-item {
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(209, 213, 219, 0.9);
+  box-shadow: 0 8px 18px rgba(148, 163, 184, 0.3);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+}
+
+body.theme-dark .recent-file-item {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(55, 65, 81, 0.9);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.9);
+}
+
+.recent-file-item:hover {
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.recent-file-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.recent-file-name {
+  font-weight: 500;
+  color: var(--text-strong);
+  max-width: 210px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-file-folder {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.recent-file-meta {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.recent-file-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* =========================================
+   MODAL & PREVIEW
+========================================= */
+
 .modal.hidden {
   display: none;
 }
+
 .modal {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: block;
 }
+
 .modal-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(2, 6, 23, 0.6);
   backdrop-filter: blur(4px);
 }
+
 .modal-content {
   position: relative;
   max-width: 980px;
@@ -882,6 +1012,7 @@ code {
   z-index: 61;
   overflow: hidden;
 }
+
 .modal-close {
   position: absolute;
   right: 8px;
@@ -892,65 +1023,25 @@ code {
   cursor: pointer;
   color: var(--text-muted);
 }
+
 .preview-body {
   max-height: 80vh;
   overflow: auto;
   padding: 8px;
 }
+
 .preview-body img {
   display: block;
   margin: 0 auto;
 }
+
 .markdown-preview {
   padding: 8px 12px;
 }
 
-/* Thumbnail styles */
-.folder-thumb {
-  width: 84px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 8px;
-  display: block;
-}
-.file-thumb {
-  width: 48px;
-  height: 36px;
-  object-fit: cover;
-  border-radius: 6px;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-.file-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.file-name {
-  display: inline-block;
-  max-width: 320px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.file-icon {
-  width: 48px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-card-soft);
-  border-radius: 6px;
-  color: var(--text-muted);
-}
-
 /* =========================================
-   UPLOAD SPINNER & BUSY STATE
+   UPLOAD SPINNER & PROGRESS
 ========================================= */
-
-.upload-section {
-  position: relative; /* so spinner overlays this card */
-}
 
 .upload-spinner {
   position: absolute;
@@ -998,22 +1089,11 @@ body.theme-dark .upload-spinner {
   font-weight: 500;
 }
 
-/* When uploading, slightly dim the drop zone */
-.drop-zone-busy {
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-/* Simple spinner animation */
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
-
-/* =========================================
-   UPLOAD PROGRESS BAR
-========================================= */
 
 .upload-progress {
   margin-top: 10px;
@@ -1096,7 +1176,6 @@ body.theme-dark .toast {
   flex: 1;
 }
 
-/* Variants */
 .toast-success::before {
   background: #16a34a;
 }
@@ -1114,7 +1193,7 @@ body.theme-dark .toast {
   color: var(--text-soft);
 }
 
-/* Animations */
+/* Toast animation */
 @keyframes toast-in {
   from {
     transform: translateY(8px);
@@ -1123,5 +1202,36 @@ body.theme-dark .toast {
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+/* =========================================
+   UTILITIES & RESPONSIVE
+========================================= */
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-sort-block {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card {
+    padding: 14px 12px 16px;
   }
 }

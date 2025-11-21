@@ -1,45 +1,57 @@
 import os
 import json
+import io
+import zipfile
+import mimetypes
+import shutil
 from pathlib import Path
 from datetime import datetime
 
-import mimetypes
 from flask import Flask, request, jsonify, send_file, abort
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+
 try:
     from PIL import Image
     PIL_AVAILABLE = True
-except Exception:
+except Exception:  # optional dependency
     Image = None
     PIL_AVAILABLE = False
-import subprocess
-import shutil
 
-# Define base directory and storage paths
+# ==========================
+# PATHS & CONFIG
+# ==========================
+
 BASE_DIR = Path(__file__).resolve().parent
 STORAGE_ROOT = BASE_DIR / "storage"
 RULES_FILE = BASE_DIR / "rules.json"
 
-# Initialize Flask app and enable CORS
+# Ensure storage exists
+STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Thumbnails live inside STORAGE_ROOT so existing /view & /download can serve them
+THUMB_ROOT = STORAGE_ROOT / ".thumbnails"
+THUMB_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Optional "quota" just for the UI storage bar (10 GB default, override with env)
+MAX_STORAGE_BYTES = int(os.environ.get("SMARTDRIVE_MAX_BYTES", str(10 * 1024 * 1024 * 1024)))
+
 app = Flask(__name__)
 CORS(app)
 
-# Ensure the storage directory exists
-STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
-
-# Thumbnail storage (inside STORAGE_ROOT so it is accessible via existing view/download)
-THUMB_ROOT = STORAGE_ROOT / ".thumbnails"
-THUMB_ROOT.mkdir(parents=True, exist_ok=True)
 
 # ==========================
 # HELPER FUNCTIONS
 # ==========================
 
-def load_custom_rules():
+def load_custom_rules() -> dict:
     """
-    Load custom file categorization rules from the rules.json file.
-    Returns an empty dictionary if the file doesn't exist or fails to load.
+    Load custom file categorization rules from rules.json.
+    Structure:
+    {
+        "CAD": [".dwg", ".dxf"],
+        "Design": [".psd", ".ai"]
+    }
     """
     if RULES_FILE.is_file():
         try:
@@ -49,125 +61,89 @@ def load_custom_rules():
     return {}
 
 
-def generate_image_thumbnail(src_path: Path, dst_path: Path, size=(320, 240)) -> bool:
+def save_custom_rules(rules: dict) -> None:
+    """Persist custom rules to rules.json in pretty JSON."""
     try:
-        dst_path.parent.mkdir(parents=True, exist_ok=True)
-        with Image.open(src_path) as im:
-            # convert to RGB for consistent JPEG output
-            if im.mode != "RGB":
-                im = im.convert("RGB")
-            im.thumbnail(size)
-            im.save(dst_path, format="JPEG", quality=85)
-        return True
+        RULES_FILE.write_text(json.dumps(rules, indent=2))
     except Exception:
-        return False
+        # Failing to save rules should not crash the app
+        pass
 
 
-def generate_video_thumbnail(src_path: Path, dst_path: Path, time_offset="00:00:01", size=(320, -2)) -> bool:
-    """Try to extract a single frame from video using ffmpeg (if available).
-
-    `size` should be (width, height) where -2 keeps aspect ratio. The dst will be a JPG.
-    Returns True if thumbnail created.
-    """
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        return False
-
-    dst_path.parent.mkdir(parents=True, exist_ok=True)
-    # build scale filter
-    width = size[0]
-    scale = f"scale={width}:-2" if width and width > 0 else "scale=320:-2"
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-ss",
-        time_offset,
-        "-i",
-        str(src_path),
-        "-frames:v",
-        "1",
-        "-vf",
-        scale,
-        str(dst_path),
-    ]
-    try:
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return dst_path.is_file()
-    except Exception:
-        return False
-
-def make_unique_filename(directory: Path, filename: str) -> Path:
-    base = Path(filename).stem
-    ext = Path(filename).suffix
-    counter = 1
-    new_name = filename
-
-    while (directory / new_name).exists():
-        new_name = f"{base} ({counter}){ext}"
-        counter += 1
-
-    return directory / new_name
+def normalize_extension(ext: str) -> str:
+    """Ensure extension is lowercase and starts with a dot."""
+    if not ext:
+        return ""
+    ext = ext.strip().lower()
+    if not ext:
+        return ""
+    if not ext.startswith("."):
+        ext = "." + ext
+    return ext
 
 
-def generate_thumbnail(file_path: Path):
-    """Create a JPEG thumbnail for images and videos under THUMB_ROOT mirroring folder structure."""
-    rel = file_path.relative_to(STORAGE_ROOT)
-    thumb_path = THUMB_ROOT / rel
-    thumb_path = thumb_path.with_suffix('.jpg')
-
-    ext = file_path.suffix.lower()
-    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'}
-    video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm'}
-
-    if ext in image_exts:
-        return generate_image_thumbnail(file_path, thumb_path)
-    if ext in video_exts:
-        return generate_video_thumbnail(file_path, thumb_path)
-    return False
-
-
-def save_custom_rules(rules):
-    RULES_FILE.write_text(json.dumps(rules, indent=2))
-
-
-def categorize_file(filename: str, custom_rules: dict) -> str:
+def categorize_file(filename: str, custom_rules: dict | None = None) -> str:
     """
     Decide which folder a file should go in based on extension.
     Custom rules > built-in groups > 'EXT Files' > 'Other'
     """
     ext = Path(filename).suffix.lower()
+    rules = custom_rules or load_custom_rules()
 
     # 1. Custom rules
-    for folder, exts in custom_rules.items():
-        if ext in exts:
-            return folder
+    for folder, exts in rules.items():
+        try:
+            if ext in [normalize_extension(e) for e in exts]:
+                return folder
+        except Exception:
+            continue
 
     # 2. Built-in mapping
     groups = {
         "MS Word": [".doc", ".docx", ".rtf", ".odt"],
         "MS Excel": [".xls", ".xlsx", ".csv"],
         "PDF": [".pdf"],
-        "PowerPoint": [".ppt", ".pptx"],
         "Images": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"],
-        "Audio": [".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a"],
-        "Video": [".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm"],
-        "Text": [".txt", ".md", ".log"],
-        "Archives": [".zip", ".rar", ".7z", ".tar", ".gz"],
+        "Audio": [".mp3", ".wav", ".ogg", ".flac", ".m4a"],
+        "Video": [".mp4", ".mov", ".avi", ".mkv", ".webm"],
+        "Text": [".txt", ".log", ".md"],
+        "Code": [
+            ".py", ".js", ".ts", ".html", ".css", ".json", ".yml", ".yaml",
+            ".java", ".c", ".cpp", ".cs", ".go", ".rs", ".php", ".sh", ".bat",
+        ],
+        "Archives": [".zip", ".rar", ".7z", ".tar", ".gz", ".bz2"],
+        "Executables": [".exe", ".msi", ".bin", ".appimage"],
     }
 
     for folder, exts in groups.items():
         if ext in exts:
             return folder
 
-    # 3. New extension → its own folder, e.g. "JSON Files"
+    # 3. Fallback: "EXT Files" based on extension
     if ext:
-        return ext.lstrip(".").upper() + " Files"
+        return f"{ext[1:].upper()} Files"
 
-    # 4. No extension
+    # 4. Completely unknown (no extension)
     return "Other"
 
 
+def safe_resolve_relpath(rel_path: str) -> Path:
+    """
+    Safely resolve a relative path under STORAGE_ROOT.
+    Prevents path traversal (../../etc/passwd).
+    """
+    rel_path = rel_path.lstrip("/").replace("\\", "/")
+    candidate = (STORAGE_ROOT / rel_path).resolve()
+    storage_root = STORAGE_ROOT.resolve()
+
+    # candidate must be inside storage_root
+    if candidate != storage_root and storage_root not in candidate.parents:
+        abort(400, description="Invalid path")
+    return candidate
+
+
 def build_file_info(path: Path) -> dict:
+    """Return metadata for a file suitable for the frontend."""
     stat = path.stat()
     rel_path = path.relative_to(STORAGE_ROOT)
     parts = rel_path.parts
@@ -177,8 +153,8 @@ def build_file_info(path: Path) -> dict:
     thumb_rel = None
     try:
         thumb_candidate = THUMB_ROOT / rel_path
-        # thumbnails are saved as JPG
-        thumb_candidate = thumb_candidate.with_suffix('.jpg')
+        # thumbnails are saved as JPG by convention
+        thumb_candidate = thumb_candidate.with_suffix(".jpg")
         if thumb_candidate.is_file():
             thumb_rel = thumb_candidate.relative_to(STORAGE_ROOT).as_posix()
     except Exception:
@@ -186,7 +162,7 @@ def build_file_info(path: Path) -> dict:
 
     return {
         "name": path.name,
-        "relative_path": str(rel_path).replace("\\", "/"),
+        "relative_path": rel_path.as_posix(),
         "category": category,
         "thumbnail": thumb_rel,
         "size_bytes": stat.st_size,
@@ -196,108 +172,185 @@ def build_file_info(path: Path) -> dict:
     }
 
 
-# ==========================
-# ROUTES
-# ==========================
+def iter_storage_files():
+    """
+    Yield Path objects for all files under STORAGE_ROOT,
+    skipping the .thumbnails tree.
+    """
+    try:
+        thumb_root_resolved = THUMB_ROOT.resolve()
+    except Exception:
+        thumb_root_resolved = None
 
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "message": "SmartDrive backend running!"})
-
-
-@app.route("/upload", methods=["POST"])
-def upload():
-    custom_rules = load_custom_rules()
-
-    files = request.files.getlist("file")
-    if not files:
-        return jsonify({"success": False, "message": "No files uploaded."}), 400
-
-    saved = []
-
-    for f in files:
-        if not f or f.filename == "":
-            continue
-
-        filename = secure_filename(f.filename)
-        category = categorize_file(filename, custom_rules)
-
-        target_dir = STORAGE_ROOT / category
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        # SAFE FILENAME
-        target_path = make_unique_filename(target_dir, filename)
-
-        f.save(target_path)
-
-        try:
-            generate_thumbnail(target_path)
-        except Exception:
-            pass
-
-        saved.append(build_file_info(target_path))
-
-    return jsonify({
-        "success": True,
-        "message": f"Uploaded {len(saved)} file(s).",
-        "files": saved,
-    })
-
-@app.route("/files", methods=["GET"])
-def list_files():
-    results = []
     for root, _, files in os.walk(STORAGE_ROOT):
         root_path = Path(root).resolve()
-        # skip thumbnails directory
+
+        # Skip thumbnails directory
         try:
-            if THUMB_ROOT.resolve() == root_path or THUMB_ROOT.resolve() in root_path.parents:
+            if thumb_root_resolved and (
+                root_path == thumb_root_resolved or thumb_root_resolved in root_path.parents
+            ):
                 continue
         except Exception:
             pass
 
         for name in files:
-            path = Path(root) / name
-            results.append(build_file_info(path))
+            yield Path(root) / name
+
+
+def save_uploaded_file(f, custom_rules: dict | None = None) -> Path:
+    """
+    Save an uploaded file into STORAGE_ROOT in the proper category, handling
+    filename collisions by appending a numeric suffix.
+    Returns the final file path.
+    """
+    original_name = f.filename or "uploaded"
+    filename = secure_filename(original_name)
+    if not filename:
+        filename = "uploaded"
+
+    folder = categorize_file(filename, custom_rules=custom_rules)
+    target_dir = STORAGE_ROOT / folder
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    stem = Path(filename).stem
+    ext = Path(filename).suffix
+
+    candidate = target_dir / filename
+    counter = 1
+    while candidate.exists():
+        candidate = target_dir / f"{stem} ({counter}){ext}"
+        counter += 1
+
+    f.save(candidate)
+
+    # Optional: generate thumbnail for images (if Pillow is installed)
+    if PIL_AVAILABLE:
+        try:
+            generate_thumbnail(candidate)
+        except Exception:
+            # Thumbnail failure should not block upload
+            pass
+
+    return candidate
+
+
+def generate_thumbnail(path: Path, size=(240, 180)) -> None:
+    """Generate an image thumbnail parallel to the file path under THUMB_ROOT."""
+    if not PIL_AVAILABLE:
+        return
+
+    # Only bother for typical image formats
+    image_exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
+    if path.suffix.lower() not in image_exts:
+        return
+
+    rel = path.relative_to(STORAGE_ROOT)
+    thumb_path = (THUMB_ROOT / rel).with_suffix(".jpg")
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with Image.open(path) as img:
+        img.thumbnail(size)
+        img.convert("RGB").save(thumb_path, format="JPEG", quality=80)
+
+
+# ==========================
+# ROUTES
+# ==========================
+
+@app.route("/health", methods=["GET"])
+def health():
+    """Simple health check used by the frontend."""
+    return jsonify({"status": "ok"})
+
+
+@app.route("/files", methods=["GET"])
+def list_files():
+    """Return metadata for all files for the browser UI."""
+    results = [build_file_info(path) for path in iter_storage_files()]
     return jsonify({"files": results})
 
 
-def safe_resolve_relpath(rel_path: str) -> Path:
+@app.route("/stats", methods=["GET"])
+def stats():
     """
-    Convert 'MS Word/report.docx' → absolute path, ensure it stays inside STORAGE_ROOT.
+    Return simple storage statistics so the frontend can draw a usage bar.
+    - total_bytes: sum of all file sizes (excluding thumbnails)
+    - total_files: number of files
+    - max_bytes: configured max/quota (for percentage)
     """
-    joined = STORAGE_ROOT / rel_path
-    resolved = joined.resolve()
+    total_bytes = 0
+    total_files = 0
 
-    try:
-        resolved.relative_to(STORAGE_ROOT)
-    except ValueError:
-        abort(400, description="Invalid path")
+    for path in iter_storage_files():
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            continue
+        total_files += 1
+        total_bytes += st.st_size
 
-    return resolved
+    return jsonify(
+        {
+            "total_bytes": total_bytes,
+            "total_files": total_files,
+            "max_bytes": MAX_STORAGE_BYTES,
+        }
+    )
+
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    """
+    Handle file uploads.
+    Accepts multiple files via 'file' field.
+    """
+    if "file" not in request.files:
+        return jsonify({"success": False, "message": "No file part in the request"}), 400
+
+    files = request.files.getlist("file")
+    files = [f for f in files if f.filename]
+
+    if not files:
+        return jsonify({"success": False, "message": "No selected file(s)"}), 400
+
+    rules = load_custom_rules()
+
+    saved_paths = []
+    for f in files:
+        saved = save_uploaded_file(f, custom_rules=rules)
+        saved_paths.append(saved.relative_to(STORAGE_ROOT).as_posix())
+
+    message = f"Uploaded {len(saved_paths)} file(s)."
+    return jsonify({"success": True, "message": message, "paths": saved_paths})
+
+
+@app.route("/view", methods=["GET"])
+def view_file():
+    """
+    Stream a file for inline viewing (image, pdf, text, etc.).
+    Used by the preview modal in the frontend.
+    """
+    rel_path = request.args.get("path")
+    if not rel_path:
+        abort(400, description="Missing path parameter")
+
+    file_path = safe_resolve_relpath(rel_path)
+
+    if not file_path.is_file():
+        abort(404, description="File not found")
+
+    mime_type, _ = mimetypes.guess_type(file_path.name)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+
+    return send_file(file_path, mimetype=mime_type)
 
 
 @app.route("/download", methods=["GET", "HEAD"])
 def download():
-    rel_path = request.args.get("path")
-    if not rel_path:
-        abort(400, description="Missing path parameter")
-
-    file_path = safe_resolve_relpath(rel_path)
-
-    if not file_path.is_file():
-        abort(404, description="File not found")
-
-    if request.method == "HEAD":
-        return ("", 200)
-
-    return send_file(file_path, as_attachment=True)
-
-
-@app.route("/view", methods=["GET", "HEAD"])
-def view_file():
-    """Serve a file for inline viewing (no attachment). Uses correct Content-Type.
-
-    Note: this differs from `/download` which forces an attachment.
+    """
+    Download a single file. HEAD is used by the frontend to verify existence.
     """
     rel_path = request.args.get("path")
     if not rel_path:
@@ -309,15 +362,81 @@ def view_file():
         abort(404, description="File not found")
 
     if request.method == "HEAD":
-        return ("", 200)
+        # Just confirm file exists
+        return "", 200
 
-    # Try to guess mimetype; fall back to octet-stream
-    mimetype, _ = mimetypes.guess_type(str(file_path))
-    return send_file(file_path, mimetype=(mimetype or "application/octet-stream"), as_attachment=False)
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=file_path.name,
+    )
+
+
+@app.route("/download_folder", methods=["GET"])
+def download_folder():
+    """
+    Zip an entire folder (category) and return it as a single download.
+    The frontend sends ?folder=<folderName>, which is treated as a relative
+    path under STORAGE_ROOT, e.g. "PDF" or "MS Word".
+    """
+    folder_rel = request.args.get("folder", "").strip()
+    if not folder_rel:
+        abort(400, description="Missing folder parameter")
+
+    # Resolve folder path safely inside STORAGE_ROOT
+    folder_path = STORAGE_ROOT / folder_rel
+    try:
+        folder_path = folder_path.resolve()
+        storage_root = STORAGE_ROOT.resolve()
+        if folder_path != storage_root and storage_root not in folder_path.parents:
+            abort(400, description="Invalid folder path")
+    except Exception:
+        abort(400, description="Invalid folder path")
+
+    if not folder_path.is_dir():
+        abort(404, description="Folder not found")
+
+    mem = io.BytesIO()
+
+    try:
+        thumb_root_resolved = THUMB_ROOT.resolve()
+    except Exception:
+        thumb_root_resolved = None
+
+    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(folder_path):
+            root_path = Path(root).resolve()
+
+            # Skip thumbnails directory
+            try:
+                if thumb_root_resolved and (
+                    root_path == thumb_root_resolved or thumb_root_resolved in root_path.parents
+                ):
+                    continue
+            except Exception:
+                pass
+
+            for name in files:
+                file_path = Path(root) / name
+                try:
+                    arcname = file_path.relative_to(folder_path.parent)
+                except Exception:
+                    arcname = file_path.name
+                zf.write(file_path, arcname.as_posix())
+
+    mem.seek(0)
+    download_name = f"{folder_path.name}.zip"
+    return send_file(
+        mem,
+        as_attachment=True,
+        download_name=download_name,
+        mimetype="application/zip",
+    )
 
 
 @app.route("/delete", methods=["DELETE"])
-def delete():
+def delete_file():
+    """Delete a file plus any thumbnail, used by the 'Delete' action in UI."""
     rel_path = request.args.get("path")
     if not rel_path:
         return jsonify({"success": False, "message": "Missing path parameter"}), 400
@@ -333,43 +452,70 @@ def delete():
     # also remove any generated thumbnail
     try:
         rel = file_path.relative_to(STORAGE_ROOT)
-        thumb = THUMB_ROOT / rel
-        thumb = thumb.with_suffix('.jpg')
+        thumb = (THUMB_ROOT / rel).with_suffix(".jpg")
         if thumb.is_file():
             thumb.unlink()
     except Exception:
         pass
 
-    return jsonify({"success": True, "message": "File deleted."})
+    # Attempt to clean up empty category folder (optional)
+    try:
+        parent = file_path.parent
+        if parent != STORAGE_ROOT and not any(parent.iterdir()):
+            parent.rmdir()
+    except Exception:
+        pass
+
+    return jsonify({"success": True, "message": "File deleted"})
 
 
 @app.route("/rules", methods=["GET", "POST"])
 def rules():
+    """
+    GET  -> return existing custom rules
+    POST -> add/update a rule for a folder.
+            JSON body: { "folder": "CAD", "extensions": ["dwg", "dxf"] }
+    """
     if request.method == "GET":
-        return jsonify({"custom_rules": load_custom_rules()})
+        rules_data = load_custom_rules()
+        return jsonify({"custom_rules": rules_data})
 
     data = request.get_json(silent=True) or {}
-    folder = data.get("folder", "").strip()
-    extensions = data.get("extensions", [])
+    folder = (data.get("folder") or "").strip()
+    exts = data.get("extensions") or []
 
-    if not folder or not isinstance(extensions, list):
-        return jsonify({"success": False, "message": "Invalid rule data."}), 400
+    if not folder or not isinstance(exts, list):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Invalid payload. Require 'folder' and list 'extensions'.",
+                }
+            ),
+            400,
+        )
 
     norm_exts = []
-    for ext in extensions:
-        e = ext.strip().lower()
-        if not e:
-            continue
-        if not e.startswith("."):
-            e = "." + e
-        norm_exts.append(e)
+    for raw in exts:
+        e = normalize_extension(str(raw))
+        if e:
+            norm_exts.append(e)
 
-    rules = load_custom_rules()
-    rules[folder] = norm_exts
-    save_custom_rules(rules)
+    if not norm_exts:
+        return (
+            jsonify(
+                {"success": False, "message": "No valid extensions provided."}
+            ),
+            400,
+        )
 
-    return jsonify({"success": True, "custom_rules": rules})
+    rules_data = load_custom_rules()
+    rules_data[folder] = norm_exts
+    save_custom_rules(rules_data)
+
+    return jsonify({"success": True, "custom_rules": rules_data})
 
 
 if __name__ == "__main__":
+    # 0.0.0.0 ensures the app is reachable on EC2 from the outside
     app.run(host="0.0.0.0", port=5000, debug=True)

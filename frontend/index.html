@@ -28,7 +28,7 @@
             </div>
 
             <div class="header-right">
-                <!-- Theme toggle (NEW) -->
+                <!-- Theme toggle -->
                 <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-label="Toggle theme"
                     data-theme="light">
                     <span class="icon-sun">☀️</span>
@@ -45,7 +45,7 @@
         <!-- MAIN CONTENT -->
         <main class="app-main">
             <div class="layout-grid">
-                <!-- LEFT: Upload + Browser -->
+                <!-- LEFT: Upload + Recent + Browser -->
                 <div class="primary-column">
                     <!-- UPLOAD CARD -->
                     <section class="upload-section card">
@@ -67,19 +67,32 @@
                             </div>
                         </div>
 
-                        <!-- 🔄 Upload spinner overlay (shown while talking to backend) -->
+                        <!-- Upload spinner overlay -->
                         <div id="uploadSpinner" class="upload-spinner hidden" aria-live="polite">
                             <div class="upload-spinner-ring"></div>
                             <span class="upload-spinner-text">Uploading...</span>
                         </div>
 
-                        <!-- 📊 Upload progress bar (0–100%) -->
+                        <!-- Upload progress bar -->
                         <div id="uploadProgress" class="upload-progress hidden" aria-hidden="true">
                             <div class="upload-progress-track">
                                 <div id="uploadProgressBar" class="upload-progress-bar"></div>
                             </div>
                             <span id="uploadProgressText" class="upload-progress-text">0%</span>
                         </div>
+                    </section>
+
+                    <!-- RECENT ACTIVITY CARD -->
+                    <section class="recent-section card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Recent Activity</h2>
+                                <p>Last files you worked with across all folders.</p>
+                            </div>
+                        </div>
+                        <ul id="recentFilesList" class="recent-files-list">
+                            <!-- Filled by JS -->
+                        </ul>
                     </section>
 
                     <!-- FILE BROWSER CARD -->
@@ -92,6 +105,9 @@
                                 <span id="currentFolderLabel" class="breadcrumb-label">
                                     Folders
                                 </span>
+                                <button id="downloadFolderBtn" class="btn-small" disabled>
+                                    Download Folder
+                                </button>
                             </div>
                             <div class="search-sort-block">
                                 <div class="input-wrapper">
@@ -120,10 +136,10 @@
                                 </div>
                             </div>
 
-                            <!-- File table view (inside a folder) -->
+                            <!-- File table view (inside a folder / search) -->
                             <div id="fileView" class="hidden">
-                                <!-- Matching folders for search results (appears above file table) -->
-                                <div id="searchFolderMatches" class="folder-grid search-folder-grid"></div>
+                                <!-- Matching folders for search results -->
+                                <div id="searchFolderMatches" class="folder-grid search-folder-grid hidden"></div>
                                 <div class="table-wrapper">
                                     <table id="fileTable" class="file-table">
                                         <thead>
@@ -147,7 +163,7 @@
                     </section>
                 </div>
 
-                <!-- RIGHT: Rules sidebar -->
+                <!-- RIGHT: Rules + Storage sidebar -->
                 <aside class="side-column">
                     <section class="rules-section card">
                         <div class="card-header">
@@ -157,6 +173,21 @@
                             </div>
                         </div>
 
+                        <!-- STORAGE USAGE BAR -->
+                        <div class="storage-section">
+                            <div class="storage-header">
+                                <span>Storage usage</span>
+                                <span id="storageUsageLabel" class="storage-usage-label">—</span>
+                            </div>
+                            <div class="storage-bar-track">
+                                <div id="storageBarFill" class="storage-bar-fill"></div>
+                            </div>
+                            <div class="storage-footer">
+                                <span id="storageFilesCount" class="storage-files-count">0 files</span>
+                            </div>
+                        </div>
+
+                        <!-- Rules form -->
                         <div class="rules-form">
                             <div class="field-group">
                                 <label for="ruleFolder">Folder name</label>
@@ -197,23 +228,22 @@
         </div>
     </div>
 
-    <!-- 🔔 Toast notifications container -->
+    <!-- Toast notifications -->
     <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <!-- Markdown renderer + sanitizer (CDN) -->
+    <!-- Markdown renderer + sanitizer -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
 
     <!-- Main app logic -->
     <script src="script.js"></script>
 
-    <!-- Small extra script ONLY for theme toggle -->
+    <!-- Theme toggle script -->
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const btn = document.getElementById("themeToggleBtn");
             if (!btn) return;
 
-            // Determine initial theme (localStorage > system preference > light)
             const stored = localStorage.getItem("scd-theme");
             const prefersDark =
                 window.matchMedia &&
