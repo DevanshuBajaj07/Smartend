@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <title>Smart Cloud Drive</title>
@@ -7,6 +8,7 @@
     <!-- Main stylesheet -->
     <link rel="stylesheet" href="style.css" />
 </head>
+
 <body class="theme-light">
     <!-- Soft cloudy gradient background -->
     <div class="app-background"></div>
@@ -27,13 +29,8 @@
 
             <div class="header-right">
                 <!-- Theme toggle (NEW) -->
-                <button
-                    id="themeToggleBtn"
-                    class="theme-toggle-btn"
-                    type="button"
-                    aria-label="Toggle theme"
-                    data-theme="light"
-                >
+                <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-label="Toggle theme"
+                    data-theme="light">
                     <span class="icon-sun">☀️</span>
                     <span class="icon-moon">🌙</span>
                 </button>
@@ -66,13 +63,22 @@
                                 <p>or pick files from your device</p>
                                 <button id="browseBtn" class="btn btn-primary">Browse Files</button>
                                 <!-- Hidden input used by JS -->
-                                <input
-                                    id="fileInput"
-                                    type="file"
-                                    multiple
-                                    style="display: none"
-                                />
+                                <input id="fileInput" type="file" multiple style="display: none" />
                             </div>
+                        </div>
+
+                        <!-- 🔄 Upload spinner overlay (shown while talking to backend) -->
+                        <div id="uploadSpinner" class="upload-spinner hidden" aria-live="polite">
+                            <div class="upload-spinner-ring"></div>
+                            <span class="upload-spinner-text">Uploading...</span>
+                        </div>
+
+                        <!-- 📊 Upload progress bar (0–100%) -->
+                        <div id="uploadProgress" class="upload-progress hidden" aria-hidden="true">
+                            <div class="upload-progress-track">
+                                <div id="uploadProgressBar" class="upload-progress-bar"></div>
+                            </div>
+                            <span id="uploadProgressText" class="upload-progress-text">0%</span>
                         </div>
                     </section>
 
@@ -80,11 +86,7 @@
                     <section class="browser-section card">
                         <div class="card-header">
                             <div class="breadcrumb-block">
-                                <button
-                                    id="backToFoldersBtn"
-                                    class="btn btn-ghost"
-                                    disabled
-                                >
+                                <button id="backToFoldersBtn" class="btn btn-ghost" disabled>
                                     ← Folders
                                 </button>
                                 <span id="currentFolderLabel" class="breadcrumb-label">
@@ -94,12 +96,8 @@
                             <div class="search-sort-block">
                                 <div class="input-wrapper">
                                     <span class="input-icon">🔍</span>
-                                    <input
-                                        id="searchInput"
-                                        type="text"
-                                        placeholder="Search by file or folder name..."
-                                        class="search-input"
-                                    />
+                                    <input id="searchInput" type="text" placeholder="Search by file or folder name..."
+                                        class="search-input" />
                                 </div>
                                 <select id="sortSelect" class="sort-select">
                                     <option value="name-asc">Name (A → Z)</option>
@@ -162,19 +160,11 @@
                         <div class="rules-form">
                             <div class="field-group">
                                 <label for="ruleFolder">Folder name</label>
-                                <input
-                                    id="ruleFolder"
-                                    type="text"
-                                    placeholder="e.g. CAD"
-                                />
+                                <input id="ruleFolder" type="text" placeholder="e.g. CAD" />
                             </div>
                             <div class="field-group">
                                 <label for="ruleExtensions">Extensions</label>
-                                <input
-                                    id="ruleExtensions"
-                                    type="text"
-                                    placeholder="e.g. dwg, dxf"
-                                />
+                                <input id="ruleExtensions" type="text" placeholder="e.g. dwg, dxf" />
                             </div>
                             <button id="saveRuleBtn" class="btn btn-primary btn-full">
                                 Save Rule
@@ -207,11 +197,14 @@
         </div>
     </div>
 
+    <!-- 🔔 Toast notifications container -->
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
     <!-- Markdown renderer + sanitizer (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
 
-    <!-- Main app logic (unchanged) -->
+    <!-- Main app logic -->
     <script src="script.js"></script>
 
     <!-- Small extra script ONLY for theme toggle -->
@@ -250,4 +243,5 @@
         });
     </script>
 </body>
+
 </html>
